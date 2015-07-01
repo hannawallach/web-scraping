@@ -1,0 +1,255 @@
+* Objective
+
+Today we're going to write a program that scrapes
+StreetEasy. Specifically, we're going to write a program that finds
+all listings in Williamsburg and then, for each listing, extracts the
+price and number of bedrooms. Using this data, we can then make a
+scatter plot of price vs. number of bedrooms.
+
+
+* Program structure
+
+The way our program will be structured is as follows: First we're
+going to do a search for all rental listings in NYC and make a list of
+the URLs for these listings. Then we're going to visit each URL and
+download the contents of that page. Then we're going extract data of
+interest from each listing page. So there are 3 components:
+
+ * Get all listing URLs
+
+ * Download all listings
+
+ * Extract each listing's data
+
+So that we don't needlessly scrape data that we have scraped
+previously, we're going to create a cache directory. We'll store the
+output of each component (i.e., the listing URLs, the listing pages,
+or extracted listing data, depending on the component) in this
+directory. Then before running each compnent, we'll check to see
+whether that component's output already exists.
+
+Each component will be implemented using a Python function (that
+itself may call other functions):
+
+ * get_listing_urls()
+
+ * get_listing_pages()
+
+ * extract_data()
+
+To tie these components together, we're also going to write a main()
+function, that calls each component function in order.
+
+Lastly, I want to point out that I've written some "helper" Python
+functions that we can use througout our program. They are:
+
+ * download_url()
+
+ * makedir()
+
+ * safe_write()
+
+
+* main()
+
+We're going to start by writing the main() function. The first thing
+we're going to do is create a Browser object using
+mechanize. Conceptually, this is like any old regular web browser,
+except rather than pointing and clicking and typing things so as to
+control it, we're going to control it programmatically via Python. We
+then tell this Browser object not to observe the rules of robots.txt.
+
+Now that our Browser is set up, we can get the listing URLs. We're
+going to do this using a function called get_listing_urls() that takes
+our Browser object as its argument. We'll write this function in a few
+minutes, but for now you just need to know that it will search
+StreetEasy and then write the listing URLs -- one per line -- to the
+file whose name is stored in the variable LISTING_URLS_FILE.
+
+Having obtained our listing URLs, we now want to visit each one and
+download the data on that page. This will be done using a function
+called get_listing_pages() that also takes our Browser object as its
+argument. Again, we'll write this function shortly, but for now just
+need to know that it will run through each url in the file whose name
+is stored in the variable LISTING_URLS_FILE and, for each one,
+download the contents of that url to a single file in the directory
+whose name is stored in the variable LISTING_PAGES_DIR.
+
+Finally, we now want to process each downloaded listing page and
+extract that listing's price and number of bedrooms. We'll do this
+using a function called extract_listing_data(). Note that this
+function does not need to take our Browser object as its arugment,
+since we've already downloaded all the data we need. This function,
+which we'll write in a bit, will open each downloaded listing page
+(i.e., file in the directory whose name is stored in the variable
+LISTING_PAGES_DIR) and, for each one, extract that listing's price and
+number of bedrooms. A unique ID for that listing, along with its price
+and number of bedrooms, will then be written as a tab-separated line
+to a CSV file whose name is stored in the variable CSV_FILE.
+
+
+* get_listing_urls()
+
+So now let's implement our get_listing_urls() function, which takes a
+Browser object as its argument. This function will search StreetEasy
+and then write the listing URLs -- one per line -- to the file whose
+name is stored in the variable LISTING_URLS_FILE.
+
+The first thing we're going to do is check if this file already exists
+in our cache. If it does we're going to assume that it already
+contains the desired list and just return. If it doesn't exist, we'll
+create any intermediate directories on the file's path, so that we're
+ready to start writing data to the file itself.
+
+We can then tell our Browser object to open the StreetEasy search
+page, whose URL is stored in the variable SEARCH_URL. Once we're on
+this page, we can then search for all listings in Williamsburg.
+
+Just as in a regular browser we can find all listings in Williamsburg
+by entering "Williamsburg" into the "LOCATION" field and hitting
+"SEARCH", we can do the same thing here with our Browser object. First
+we have to tell our Browser to select the appropriate form. There are
+a few ways to do this but the easiest is to figure out whether this is
+the first, second, third, etc. form on the page and tell the Browser
+to select that form (indexed from zero). Here it looks like we're
+interested in the second form. Next we need to specify that we're
+interested in Williamsburg as our location. To figure out how best to
+do this, we can do two things: we can inspect the relevant element
+(i.e., the "LOCATION" field) in Firefox (right click), or we can (from
+within Python) print the form to the terminal. If we do the former, we
+see that the "LOCATION" field is not actually a text input field;
+instead it's a select element or a drop-down list. By inspecting its
+arguments, we can see that multiple options can be selected, and that
+the element's name is "area[]". We can also see that although the
+possible options are presented to the user (as shown in Firefox) as
+text, they're represented internally as integers. If we print the form
+(from within Python) we can also see that there's a select element
+whose name is "area[]" and whose options are integers. Fortunately,
+it's very easy to tell our Browser object to select a particular value
+from a named drop-down list. The only difficulty here is in finding
+out which integer corresponds to Williamsburg. The easiest way to do
+this is to view the HTML for the page in Firefox (using Ctrl-U) and
+then seach for Williamsburg (using Ctrl-F). Finally, having entered in
+our search query, we're going to tell our Browser to submit the query,
+and then keep track of the URL that we're sent to to.
+
+Now that we have the URL for the first page of search results (stored
+in the variable results_url), we can extract the listing URLs from
+this page, write them to the file whose name is stored in the variable
+LISTING_URLS_FILE, and then move on to the next page of listings. If
+there isn't a next page of listings, then we're done! We can implement
+this entire procedure using an infinite while loop.
+
+So that we don't needlessly scrape data that we've scraped before,
+we're going to save each page of search results to the directory whose
+name is stored in the variable SEARCH_RESULTS_DIR. We can do this with
+the function download_url(), implemented in utilities.py, which takes
+as its arguments a Browser object, a URL, and directory into which the
+URL's contents will be saved. The function returns the name of the
+file (in the specified directory) containing the URL's contents.
+
+In order to extract the listing URLs from each page of search results,
+we're going to use BeautifulSoup (a library for parsing HTML
+documents). We'll start by creating a BeautifulSoup object from our
+downloaded file of search results. This will give us a way of easily
+navigating/searching the HTML in our downloaded file. The easiest way
+of figuring out what to do next is to look at the page of search
+results in Firefox. If we do this, we can inspect each listing's link
+(right click). This indicates that each listing's link -- an <a> tag
+-- is enclosed in an <h5> tag. This <h5> tag is in turn enclosed in a
+<div> tag, whose class attribute is "details_title". We can use our
+BeautifulSoup object to pull out all such <div> tags and store them in
+a list. Each tag will be represented as a Tag object. Having done
+this, we then need to extract the URL from each tag in the list. The
+easist way to do this is to loop over each Tag object in our list, and
+pull out its <h5> tag. Since this too will be a tag object, we can
+pull out its <a> tag. Finally, we can extract the value of this tag's
+"href" attribute, which is the desired listing URL. Since this URL is
+a relative URL, we'll append it to "http://streeteasy.com" before
+saving it. Note that this entire procedure can be also be done in a
+single line of Python using a list comprehension.
+
+Once we've extracted the listing URLs from the current page of search
+results, we can write these URLs to the file whose name is stored in
+the variable LISTING_URLS_FILE and then find the URL for the next page
+of search results. In order to figure out how to find the URL for the
+next page of search results, we can look at the current page of search
+results in Firefox and inspect the "next page" link (right
+click). Doing this indicates that the next page link is represented by
+an <a> tag whose class attribute is "next_page". We can therefore use
+our BeautifulSoup object to pull out this tag. Having done this, we
+can extract and return the desired next page URL. If there's any
+problem in doing so (indicated by an AttributeError) -- e.g., because
+there is no "next page" link -- then we'll assume there isn't a next
+page of listings, and break out of the while loop.
+
+
+* get_listing_pages()
+
+So now that we have our listing URLs, we can write our
+get_listing_pages() function, which takes a Browser object as its
+argument. This function will run through each URL in the file whose
+name is stored in the variable LISTING_URLS_FILE and, for each one,
+download the contents of that URL to a single file in the directory
+whose name is stored in the variable LISTING_PAGES_DIR.
+
+The first thing we're going to do is extract the listing URLS from the
+file. We can do this with a simple list comprehension. (Note that we
+can use strip() to remove any leading or trailing whitespace.) Having
+done this, we can then loop over our list of listing URLs and, for
+each URL, try to download its contents. If we encounter any kind of
+exception, we won't halt processing of the list, but we'll output some
+information about the exception and the URL that caused it to stderr.
+
+
+* get_listing_data()
+
+Finally, we can write our get_listing_data() function, which will
+process each cached listing page (in the directory whose name is
+stored in the variable LISTING_PAGES_DIR) and, for each one, extract
+the price and the number of bedrooms. This information, along with a
+unique ID for that listing, will then be written as a tab-separated
+line to a CSV file whose name is stored in the variable CSV_FILE.
+
+In order to create a list of all files in the directory whose name is
+stored in the variable LISTING_PAGES_DIR, we can use the function
+glob() in the Python module of the same name, which returns (as a
+list) all filenames (or directory names) matching a specified
+pattern. Here, we want all files in the directory, so our pattern is
+simply "LISTING_PAGES_DIR + '/*'". We can then loop over list of
+filenames (one for each cached listing page) returned by glob().
+
+For each file, we'll start by reading its contents into a
+variable. Having done this, we can print its contents to the terminal
+so that we can start to figure out how best to extract the information
+we want. (Note that we can also just open each file in Firefox and
+view the HTML using Ctrl-U.) From examining the contents, it seems
+that all the data we need is in a single script element, and appears
+to be a single JSON object! Since JSON is highly structured and easily
+machine-readable, all we need to do is extract the string
+corresponding to the JSON object and parse it using the loads()
+function from Python's json library. Note that we're almost never this
+lucky: usually the desired data is split over multiple locations on
+the page, intermingled with formatting information. For example, we
+could have found the information in an HTML table, or an unsorted
+list, or (in the very worst case) a paragraph of unstructured text! If
+this had been the case, we would have had to use a combination of
+BeautifulSoup and regular expressions to obtain the data.
+
+We can extract the string corresponding to the JSON object using a
+regular expression that matches the string 'dataLayer' followed by any
+amount of whitespace (including no whitespace), an equals sign, any
+amount of whitespace, a left square bracket, a string consisting of
+any number (including zero) of any characters, a right square bracket,
+and a semicolon. If we wrap '.*' in capturing parentheses, then
+instead of returning the entire match, findall() will return just the
+portion matched by the expression in the capturing parentheses. To
+ensure that the regular expression returns only a single match, we can
+unpack the output of findall() to a list of length one. Having done
+this, we can then pass the extracted string to the the loads()
+function, which will return a dict representing the corresponding JSON
+object. Finally, we can test whether this dict contains 'listPrice'
+and 'listBed' as keys. If it does, we can form a tab-separated string
+consisting of the filename (i.e., a unique ID for this listing), the
+listing price, and the number of bedrooms, and write this string to
+the CSV file whose name is stored in the variable CSV_FILE.
